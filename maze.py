@@ -1,5 +1,5 @@
 from collections import deque
-from queue import PriorityQueue
+import heapq
 
 BIG_MAZE = "bigMaze.txt"
 MED_MAZE = "mediumMaze.txt"
@@ -13,7 +13,7 @@ def findMazeEnd(maze):
         return row, col
   return -1, -1
 
-def findNeighbours(maze, parent, row, col):
+def findNeighbours(maze, row, col):
   # Create list of neighbours
   neighbours = []
   # Check all adjacent locations in grid
@@ -22,9 +22,7 @@ def findNeighbours(maze, parent, row, col):
     nCol = col + offy
     # Make sure that coordinate is within bounds
     if nRow >= 0 and nRow < len(maze) and nCol >= 0 and nCol < len(maze[0]):
-      # Check if node has been visited
-      if(maze[nRow][nCol] != '%' and (nRow, nCol) not in parent):
-        parent[(nRow, nCol)] = (row, col)
+      if (maze[nRow][nCol] != '%'):
         neighbours.append((nRow, nCol))
   return neighbours
 
@@ -35,6 +33,12 @@ def backtrackPath(parent, start, end):
   path.reverse()
   return path
 
+"""
+Reads in a maze file line by line and stores it
+in a 2d array.
+
+Returns the array and the starting coordinates
+"""
 def createMaze(file):
   maze = []
   row = 0
@@ -53,13 +57,15 @@ def createMaze(file):
     row+=1
   return maze, p_row, p_col
 
+# Summarizes search results
 def generateReport(maze, p_row, p_col, path, node_count):
   drawPath(maze, path)
   printMaze(maze)
   print("End of maze found at ({}, {})".format(p_row, p_col))
   print("Total path cost: {}".format(len(path)-1))
   print("Total number of nodes expanded: {}".format(node_count))
-  
+
+# Prints the maze to console
 def printMaze(maze):
   for line in maze:
     for char in line:
@@ -67,6 +73,7 @@ def printMaze(maze):
     print()
   return
 
+# Creates dots on the maze to show path
 def drawPath(maze, path):
   for row, col in path[1:]:
     maze[row][col] = '.'
@@ -80,7 +87,7 @@ def manhattan(cur_posX, cur_posY, goal_posX, goal_posY):
 
 def greedy_solve(maze, start_row, start_col):
   # Initialize the PQ
-  pq_open = PriorityQueue()
+  frontier = []
   # Create a parent dictionary
   parent = {}
   # Get ending coordinates
@@ -88,11 +95,10 @@ def greedy_solve(maze, start_row, start_col):
   # Node count to keep track of nodes expanded
   node_count = 1
   # Append the starting position (node)
-  pq_open.put((5, (start_row, start_col)))
+  frontier.append((manhattan(start_col, start_row, end_col, end_row), 0, (start_row, start_col)))
 
-  while not pq_open.empty():
-    (dist, (p_row, p_col)) = pq_open.get()
-
+  while frontier:
+    (_, cost, (p_row, p_col)) = heapq.heappop(frontier)
     # if current position is destination, then we are done
     if(maze[p_row][p_col] == '.'):
       path = backtrackPath(parent, (start_row, start_col), (p_row, p_col))
@@ -100,10 +106,30 @@ def greedy_solve(maze, start_row, start_col):
       return
     else:
       # Find all unvisited neighbours and append them
-      neighbours = findNeighbours(maze, parent, p_row, p_col)
+      neighbours = findNeighbours(maze, p_row, p_col)
       for node in neighbours:
-        pq_open.put((manhattan(node[0], node[1], end_row, end_col), node))
-        node_count += 1
+        # Check if node is already in frontier
+        found = -1
+        for i in range(len(frontier)):
+          temp = frontier[i]
+          if(node == temp[2]):
+            found = i
+            break
+
+        # If its not, add it to frontier
+        newNode = (manhattan(node[0], node[1], end_row, end_col) + cost + 1, cost + 1, node)
+        if (found == -1 and node not in parent):
+          parent[(node[0], node[1])] = (p_row, p_col)
+          heapq.heappush(frontier, newNode)
+          node_count += 1
+        elif (found >= 0):
+          # decrease key
+          if(newNode[0] < frontier[i][0]):
+            parent[(node[0], node[1])] = (p_row, p_col)
+            frontier[i] = newNode
+      heapq.heapify(frontier)
+    
+
   print("Priority Queue was emptied and path was not found.")
   return -1, -1
 
@@ -128,10 +154,13 @@ def dfs_solve(maze, start_row, start_col):
       return
     else:
       # Otherwise, find all unvisited neighbours and push them to stack
-      neighbours = findNeighbours(maze, parent, p_row, p_col)
-      for node in neighbours:
-        stack.append(node)
-        node_count += 1
+      neighbours = findNeighbours(maze, p_row, p_col)
+      for (row, col) in neighbours:
+        # Check if node has been visited
+        if((row, col) not in parent):
+          parent[(row, col)] = (p_row, p_col)
+          stack.append((row, col))
+          node_count += 1
 
   print("Stack was emptied and path was not found.")
   return -1, -1
@@ -156,10 +185,13 @@ def bfs_solve(maze, start_row, start_col):
       return
     else:
       # Find all unvisited neighbours and append them
-      neighbours = findNeighbours(maze, parent, p_row, p_col)
-      for node in neighbours:
-        queue.append(node)
-        node_count += 1
+      neighbours = findNeighbours(maze, p_row, p_col)
+      for (row, col) in neighbours:
+        # Check if node has been visited
+        if((row, col) not in parent):
+          parent[(row, col)] = (p_row, p_col)
+          queue.append((row, col))
+          node_count += 1
 
   print("Queue was emptied and path was not found.")
   return -1, -1
@@ -168,7 +200,7 @@ def bfs_solve(maze, start_row, start_col):
 
 def main():
   # Initialize file and load maze into 2D array
-  file = open(BIG_MAZE ,"r")
+  file = open(BIG_MAZE, "r")
   # DFS
   print("Solving maze using DFS")
   maze, p_row, p_col = createMaze(file)
